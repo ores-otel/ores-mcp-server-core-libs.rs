@@ -1,0 +1,58 @@
+# Example for the OpenTelemetry Collector Contrib distribution.
+#
+# MCP SAFETY: this Collector is a separate process. Never configure an MCP
+# server's application logger or a Collector debug exporter to write into the
+# MCP server's stdout protocol stream.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true # Replace with verified TLS outside a private dev network.
+
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    send_timestamps: true
+
+  # The OTLP/HTTP exporter appends /v1/logs to this base URL, producing
+  # http://loki:3100/otlp/v1/logs for Loki's native OTLP endpoint.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true # Replace with verified TLS outside a private dev network.
+
+service:
+  telemetry:
+    logs:
+      level: info
+      encoding: json
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]
