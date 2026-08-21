@@ -133,6 +133,24 @@ arguments/results, arbitrary errors, request/session/user identifiers, model
 input/output, and secrets are excluded. See [`OBSERVABILITY.md`](OBSERVABILITY.md)
 and [`deploy/otel-collector.yaml`](deploy/otel-collector.yaml).
 
+## Encrypted local environments
+
+Local dotenv files use SOPS with age. Only encrypted artifacts matching
+`env/enc/*.env.enc` may be committed; their decrypted `env/dec/*.env`
+counterparts, `.sops.yaml`, and private age identities are gitignored.
+
+```sh
+nix develop
+cp .sops.yaml.example .sops.yaml  # replace the placeholder with a public recipient
+just decrypt-all
+```
+
+Use `just encrypt-all` after editing a plaintext profile. Recipes use mode
+`0600` temporary files and atomic replacement, and they never print secret
+values. See [`env/README.md`](env/README.md) for setup, mapping, and
+key-handling rules. No recipient or private identity is supplied by this
+repository.
+
 ## Development
 
 ```text

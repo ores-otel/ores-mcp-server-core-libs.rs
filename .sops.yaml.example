@@ -1,0 +1,7 @@
+# Copy this file to the gitignored .sops.yaml and replace the placeholder with
+# a PUBLIC age recipient. Never put an age private identity in this file.
+creation_rules:
+  - path_regex: '^env/enc/[^/]+[.]env[.]enc$'
+    key_groups:
+      - age:
+          - age1replace_with_your_public_age_recipient

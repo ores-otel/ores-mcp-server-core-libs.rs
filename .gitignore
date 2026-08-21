@@ -4,3 +4,27 @@
 .env
 .env.*
 !.env.example
+
+# Local SOPS policy and private age key material.
+/.sops.yaml
+/.age/
+/.sops/
+/age-key.txt
+/age-keys.txt
+/age-key*.txt
+/age-keys*.txt
+/*.agekey
+/*.age-key
+
+# Decrypted dotenv files are never committed.
+/env/dec/**
+!/env/dec/.gitkeep
+
+# Only complete encrypted dotenv artifacts belong in this directory.
+/env/enc/**
+!/env/enc/.gitkeep
+!/env/enc/*.env.enc
+
+# Local Nix/direnv outputs.
+/.direnv/
+/result

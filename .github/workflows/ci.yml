@@ -15,6 +15,20 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Enforce encrypted environment layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$(git ls-files 'env/dec/*.env' '.age/**' '.sops/**' '*.agekey' '*.age-key' 'age-key*.txt' 'age-keys*.txt')" ]]; then
+            echo 'Tracked plaintext environment or age identity material is forbidden.' >&2
+            exit 1
+          fi
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              env/enc/.gitkeep|env/enc/*.env.enc) ;;
+              *) echo 'env/enc contains a tracked file outside *.env.enc.' >&2; exit 1 ;;
+            esac
+          done < <(git ls-files -z 'env/enc/**')
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
       - name: Check formatting

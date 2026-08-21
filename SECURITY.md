@@ -24,6 +24,23 @@ only after their tests and security review pass.
 - This crate intentionally has no filesystem, process, shell, GitHub mutation,
   tool execution, or repair-application capability.
 
+## Secret files
+
+Only SOPS-encrypted dotenv artifacts matching `env/enc/*.env.enc` may be
+committed. Decrypted `env/dec/*.env` files, the active `.sops.yaml`, `.age/`,
+and conventional local age-key filenames are ignored. Keep private age
+identities outside the repository whenever possible and restrict any local
+identity file to mode `0600`.
+
+The `encrypt-all` and `decrypt-all` recipes set `umask 077`, process only
+direct regular files with the documented suffixes, write to a same-directory
+mode-`0600` temporary file, and atomically replace a destination only after
+SOPS succeeds. Shell tracing is disabled, SOPS diagnostics are suppressed, and
+the recipes do not intentionally print file contents or secret values. Inspect
+staged changes before every commit; Git ignore rules are a backstop, not a
+secret scanner. A leaked credential must be revoked and rotated even if the
+plaintext file is subsequently removed.
+
 ## Network controls
 
 Provider connections use rustls, WebPKI roots, fixed HTTPS origins, disabled
