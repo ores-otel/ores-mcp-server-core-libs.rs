@@ -871,22 +871,25 @@ pub(crate) fn collect_output<'a>(
     parts: impl IntoIterator<Item = &'a str>,
     limits: Limits,
 ) -> Result<String, ProviderError> {
-    let mut output = String::new();
-    for part in parts.into_iter().filter(|part| !part.trim().is_empty()) {
-        let separator = usize::from(!output.is_empty());
-        let next_len = output
-            .len()
-            .checked_add(separator)
-            .and_then(|value| value.checked_add(part.len()))
-            .ok_or(ProviderError::Bounds(BoundsError::Exceeded {
-                field: "output",
-            }))?;
-        limits.check_output(next_len)?;
-        if separator == 1 {
-            output.push('\n');
-        }
-        output.push_str(part);
-    }
+    let output = parts
+        .into_iter()
+        .filter(|part| !part.trim().is_empty())
+        .try_fold(String::new(), |output, part| {
+            let separator = usize::from(!output.is_empty());
+            let next_len = output
+                .len()
+                .checked_add(separator)
+                .and_then(|value| value.checked_add(part.len()))
+                .ok_or(ProviderError::Bounds(BoundsError::Exceeded {
+                    field: "output",
+                }))?;
+            limits.check_output(next_len)?;
+            Ok::<_, ProviderError>(if separator == 1 {
+                output + "\n" + part
+            } else {
+                output + part
+            })
+        })?;
     if output.is_empty() {
         Err(ProviderError::EmptyResponse)
     } else {
