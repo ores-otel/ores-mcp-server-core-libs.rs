@@ -28,3 +28,7 @@
 # Local Nix/direnv outputs.
 /.direnv/
 /result
+
+# Local temporary directories and repository-owned worktrees
+tmp/
+temp/
