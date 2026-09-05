@@ -264,6 +264,10 @@ impl AdvisoryEvidence {
 
 /// Validation failure for structured advisory evidence.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+// These `Invalid*` names are part of the closed, wire-facing error vocabulary;
+// keep the stable protocol labels instead of renaming public variants only to
+// satisfy Clippy's style heuristic.
+#[allow(clippy::enum_variant_names)]
 pub enum EvidenceError {
     /// An evidence list or aggregate observation count is outside its bound.
     #[error("runtime evidence observation count is outside the permitted range")]

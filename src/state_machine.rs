@@ -449,10 +449,10 @@ pub fn validate_model() -> Result<ModelValidationReport, ModelViolation> {
     let mut frontier = vec![LifecycleState::Created];
     while let Some(state) = frontier.pop() {
         for event in ALL_EVENTS {
-            if let Some(target) = transition_target(state, event) {
-                if reachable.insert(target) {
-                    frontier.push(target);
-                }
+            if let Some(target) = transition_target(state, event)
+                && reachable.insert(target)
+            {
+                frontier.push(target);
             }
         }
     }

@@ -570,10 +570,10 @@ fn resource(service_name: &str, service_namespace: &str, service_version: &str) 
         KeyValue::new("service.namespace", service_namespace.to_string()),
         KeyValue::new("service.version", service_version.to_string()),
     ];
-    if let Ok(value) = std::env::var("DEPLOYMENT_ENV") {
-        if valid_attribute_value(&value) {
-            attributes.push(KeyValue::new("deployment.environment.name", value));
-        }
+    if let Ok(value) = std::env::var("DEPLOYMENT_ENV")
+        && valid_attribute_value(&value)
+    {
+        attributes.push(KeyValue::new("deployment.environment.name", value));
     }
     Resource::builder_empty()
         .with_attributes(attributes)
