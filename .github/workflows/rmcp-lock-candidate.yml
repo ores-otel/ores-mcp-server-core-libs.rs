@@ -59,7 +59,7 @@ jobs:
                   packages.setdefault(name.group(1), set()).add(version.group(1))
 
           assert packages.get("rmcp") == {"3.2.0"}, packages.get("rmcp")
-          assert packages.get("rmcp-macros") == {"3.2.0"}, packages.get("rmcp-macros")
+          assert "rmcp-macros" not in packages, packages.get("rmcp-macros")
           assert packages.get("chacha20") == {"0.10.2"}, packages.get("chacha20")
           assert "0.10.1" not in packages.get("chacha20", set())
           PY
