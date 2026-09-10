@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = '0d9de405153835fbc5470eb8988f409fa405d1da'
+          test "$(git rev-parse HEAD^)" = 'd220ed8b6f5e99bf68b479fc5c9daa71938971a9'
 
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt
