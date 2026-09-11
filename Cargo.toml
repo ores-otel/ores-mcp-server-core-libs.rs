@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "crates/ores-telemetry"]
+resolver = "2"
+
 [package]
 name = "ores-mcp-server-core-libs"
 version = "0.1.0"
@@ -14,10 +18,7 @@ categories = ["development-tools", "web-programming"]
 async-trait = "0.1"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws"] }
 futures = "0.3"
-opentelemetry = { version = "=0.32.0", default-features = false, features = ["logs", "metrics", "trace"] }
-opentelemetry-appender-tracing = { version = "=0.32.0", default-features = false }
-opentelemetry-otlp = { version = "=0.32.0", default-features = false, features = ["grpc-tonic", "logs", "metrics", "tls-ring", "tls-webpki-roots", "trace"] }
-opentelemetry_sdk = { version = "=0.32.0", default-features = false, features = ["logs", "metrics", "trace"] }
+ores-telemetry = { version = "0.1.0", path = "crates/ores-telemetry" }
 reqwest = { version = "=0.12.23", default-features = false, features = ["rustls-tls-webpki-roots"] }
 rmcp = { version = "=3.1.4", default-features = false, features = ["server", "transport-io", "transport-streamable-http-server"] }
 schemars = "=1.0.4"
@@ -27,8 +28,6 @@ thiserror = "2.0"
 tokio = { version = "1.47", features = ["io-std", "io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["codec", "rt"] }
 tracing = "0.1"
-tracing-opentelemetry = "=0.33.0"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "registry"] }
 
 [dev-dependencies]
 loom = "=0.7.2"

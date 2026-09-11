@@ -1,9 +1,13 @@
 # Observability contract
 
-`observability::init(service_name, service_namespace)` installs a JSON
-`tracing` subscriber that writes to stderr and returns a `TelemetryGuard`.
-Retain the guard until process shutdown; its `Drop` implementation flushes and
-shuts down trace, metric, and log providers with bounded timeouts.
+The workspace's lightweight `ores-telemetry` package owns provider setup,
+validated configuration, and bounded shutdown for every Rust application.
+The MCP crate re-exports that boundary through
+`observability::init(service_name, service_namespace)` and adds only the
+closed MCP tool metric vocabulary. Both entry points install a JSON `tracing`
+subscriber that writes to stderr and return a `TelemetryGuard`. Retain the
+guard until process shutdown; its `Drop` implementation flushes and shuts down
+trace, metric, and log providers with bounded timeouts.
 
 ## MCP stdio safety
 

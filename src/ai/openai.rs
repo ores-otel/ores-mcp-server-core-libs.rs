@@ -123,36 +123,38 @@ fn extract_text(response: &OpenAiResponse, limits: Limits) -> Result<String, Pro
         return Err(ProviderError::IncompleteResponse);
     }
 
-    let mut output_text = Vec::new();
-    let mut message_count = 0_usize;
-    for item in &response.output {
-        match item.kind.as_str() {
+    let (output_text, message_count) = response.output.iter().try_fold(
+        (Vec::new(), 0_usize),
+        |(output_text, message_count), item| match item.kind.as_str() {
             // Reasoning items are metadata-only for this single-turn,
             // text-only connector. Any content attached to one is unexpected.
-            "reasoning" if item.content.is_empty() => {}
+            "reasoning" if item.content.is_empty() => Ok((output_text, message_count)),
             "message" => {
-                message_count += 1;
                 if item.role.as_deref() != Some("assistant")
                     || item.status.as_deref() != Some("completed")
                 {
                     return Err(ProviderError::IncompleteResponse);
                 }
-                for content in &item.content {
-                    match content.kind.as_str() {
-                        "output_text" => output_text.push(
-                            content
-                                .text
-                                .as_deref()
-                                .ok_or(ProviderError::MalformedResponse)?,
-                        ),
-                        "refusal" => return Err(ProviderError::RejectedResponse),
-                        _ => return Err(ProviderError::UnsupportedResponse),
-                    }
-                }
+                let texts = item
+                    .content
+                    .iter()
+                    .map(|content| match content.kind.as_str() {
+                        "output_text" => content
+                            .text
+                            .as_deref()
+                            .ok_or(ProviderError::MalformedResponse),
+                        "refusal" => Err(ProviderError::RejectedResponse),
+                        _ => Err(ProviderError::UnsupportedResponse),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((
+                    output_text.into_iter().chain(texts).collect(),
+                    message_count + 1,
+                ))
             }
-            _ => return Err(ProviderError::UnsupportedResponse),
-        }
-    }
+            _ => Err(ProviderError::UnsupportedResponse),
+        },
+    )?;
     if message_count == 0 {
         return Err(ProviderError::EmptyResponse);
     }

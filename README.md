@@ -11,8 +11,10 @@ related organizations. The crate standardizes:
   metrics;
 - redaction, fixed resource limits, and conformance/security test helpers.
 
-The crate targets Rust 2024 with MSRV 1.88 and pins `rmcp` 3.1.4,
-OpenTelemetry 0.32, and `tracing-opentelemetry` 0.33. Downstream repositories
+The workspace targets Rust 2024 with MSRV 1.88 and pins `rmcp` 3.1.4,
+OpenTelemetry 0.32, and `tracing-opentelemetry` 0.33. The lightweight
+`ores-telemetry` package owns OpenTelemetry for Rust applications without
+pulling in the MCP transport or AI connector graph. Downstream repositories
 must pin a reviewed immutable commit rather than a floating branch.
 
 ## Security boundary
@@ -41,6 +43,14 @@ application-specific authorization policy.
 ```toml
 [dependencies]
 ores-mcp-server-core-libs = { git = "https://github.com/ores-otel/ores-mcp-server-core-libs.rs", rev = "<reviewed-commit-sha>" }
+```
+
+Non-MCP applications should select the lightweight package from the same
+reviewed commit:
+
+```toml
+[dependencies]
+ores-telemetry = { git = "https://github.com/ores-otel/ores-mcp-server-core-libs.rs", rev = "<reviewed-commit-sha>" }
 ```
 
 ## Structured advisory connectors

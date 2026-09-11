@@ -1,0 +1,40 @@
+[package]
+org = "ores-otel"
+name = "ores-mcp-server-core-libs"
+version = "0.1.0"
+description = "Secure shared runtime components for ORES Rust MCP servers"
+license = "MIT"
+keywords = ["mcp", "observability", "opentelemetry", "rust"]
+language = "rust"
+
+[package.repository]
+vcs = "git"
+url = "https://github.com/ores-otel/ores-mcp-server-core-libs.rs"
+
+[publish]
+include_readme = true
+tag_format = "v{version}"
+smoke_test = "test -f \"$ZED_PKG_TEST_TARGET/Cargo.toml\" && cargo test --manifest-path \"$ZED_PKG_TEST_TARGET/Cargo.toml\" --all-targets --locked"
+exclude = [
+  ".env",
+  ".env.*",
+  ".direnv/**",
+  ".zed/**",
+  ".zed-pack/**",
+  "target/**",
+  "tmp/**",
+  "**/*.log",
+  ".DS_Store",
+]
+
+# Cargo.toml remains the native Rust authority. This Zed target exposes the
+# repository slice to dependency-graph and registry-fallback tooling without
+# declaring a second native registry release route.
+[targets.rust]
+dir = "."
+adapter = "rust"
+
+[scripts]
+test = "cargo test --all-targets --locked"
+lint = "cargo clippy --all-targets --locked -- -D warnings"
+format = "cargo fmt --all --check"

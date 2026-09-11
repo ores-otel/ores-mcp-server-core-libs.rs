@@ -196,17 +196,19 @@ fn extract_text(response: &GeminiResponse, limits: Limits) -> Result<String, Pro
     if candidate.content.role != "model" {
         return Err(ProviderError::MalformedResponse);
     }
-    let mut output_text = Vec::new();
-    for part in &candidate.content.parts {
-        if part.thought || !part.other.is_empty() {
-            return Err(ProviderError::UnsupportedResponse);
-        }
-        output_text.push(
+    let output_text = candidate
+        .content
+        .parts
+        .iter()
+        .map(|part| {
+            if part.thought || !part.other.is_empty() {
+                return Err(ProviderError::UnsupportedResponse);
+            }
             part.text
                 .as_deref()
-                .ok_or(ProviderError::UnsupportedResponse)?,
-        );
-    }
+                .ok_or(ProviderError::UnsupportedResponse)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     collect_output(output_text, limits)
 }
 

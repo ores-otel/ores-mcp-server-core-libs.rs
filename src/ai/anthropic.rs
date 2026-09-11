@@ -132,19 +132,19 @@ fn extract_text(response: &AnthropicResponse, limits: Limits) -> Result<String, 
         _ => return Err(ProviderError::UnsupportedResponse),
     }
 
-    let mut output_text = Vec::new();
-    for content in &response.content {
-        match content.kind.as_str() {
+    let output_text = response
+        .content
+        .iter()
+        .map(|content| match content.kind.as_str() {
             "text" => {
                 if content.thinking.is_some() || content.signature.is_some() {
                     return Err(ProviderError::UnsupportedResponse);
                 }
-                output_text.push(
-                    content
-                        .text
-                        .as_deref()
-                        .ok_or(ProviderError::MalformedResponse)?,
-                );
+                content
+                    .text
+                    .as_deref()
+                    .ok_or(ProviderError::MalformedResponse)
+                    .map(Some)
             }
             // Claude Fable 5 returns an encrypted signature even when thinking
             // display is omitted. It is non-semantic for this single-turn
@@ -155,10 +155,16 @@ fn extract_text(response: &AnthropicResponse, limits: Limits) -> Result<String, 
                     && content
                         .signature
                         .as_deref()
-                        .is_some_and(|value| !value.is_empty()) => {}
-            _ => return Err(ProviderError::UnsupportedResponse),
-        }
-    }
+                        .is_some_and(|value| !value.is_empty()) =>
+            {
+                Ok(None)
+            }
+            _ => Err(ProviderError::UnsupportedResponse),
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     collect_output(output_text, limits)
 }
 
