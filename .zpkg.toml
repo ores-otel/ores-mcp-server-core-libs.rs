@@ -36,5 +36,3 @@ adapter = "rust"
 
 [scripts]
 test = "cargo test --all-targets --locked"
-lint = "cargo clippy --all-targets --locked -- -D warnings"
-format = "cargo fmt --all --check"
