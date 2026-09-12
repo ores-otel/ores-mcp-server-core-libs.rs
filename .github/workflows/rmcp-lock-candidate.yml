@@ -2,7 +2,7 @@ name: RMCP audited lock candidate
 
 on:
   pull_request:
-    branches: [dev]
+    branches: [main, dev]
     paths:
       - Cargo.toml
       - Cargo.lock
@@ -98,61 +98,3 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
-
-  promote-audited-lock:
-    name: Promote byte-identical audited lock
-    needs: candidate
-    if: github.event_name == 'pull_request' && github.repository == 'ores-otel/ores-mcp-server-core-libs.rs' && github.actor == 'ORESoftware' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/DEN-1950-rmcp-3-2-audited-lock'
-    permissions:
-      contents: write
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Check out exact tested PR head without persisted credentials
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-          fetch-depth: 1
-          show-progress: false
-
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.88.0 --profile minimal
-
-      - name: Recreate and fingerprint the audited lock
-        id: lock
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +1.88.0 update -p rmcp --precise 3.2.0
-          cargo +1.88.0 update -p chacha20 --precise 0.10.2
-          printf '%s  %s\n' 'aa151774da9248ba97b1ab0632a75448469fe20fedcf626bb518cb6d0dc4ee2d' 'Cargo.lock' | sha256sum -c -
-          git diff --exit-code -- Cargo.toml
-          mapfile -t changed < <(git diff --name-only)
-          if [ "${#changed[@]}" -eq 0 ]; then
-            echo 'needs_push=false' >> "$GITHUB_OUTPUT"
-          else
-            test "${#changed[@]}" -eq 1
-            test "${changed[0]}" = 'Cargo.lock'
-            echo 'needs_push=true' >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Commit only the byte-identical audited lock
-        if: steps.lock.outputs.needs_push == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- Cargo.lock
-          git commit -m 'chore(DEN-1950): promote audited RMCP 3.2 lock'
-
-      - name: Push validated lock to exact PR branch
-        if: steps.lock.outputs.needs_push == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test -n "$GH_TOKEN"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"
