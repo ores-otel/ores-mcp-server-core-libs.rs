@@ -287,6 +287,15 @@ impl ProviderKind {
     /// All supported providers in deterministic status-display order.
     pub const ALL: [Self; 3] = [Self::OpenAi, Self::Anthropic, Self::Gemini];
 
+    /// The `(API key, model)` environment variable names for this provider.
+    const fn env_variable_names(self) -> (&'static str, &'static str) {
+        match self {
+            Self::OpenAi => ("OPENAI_API_KEY", "OPENAI_MODEL"),
+            Self::Anthropic => ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"),
+            Self::Gemini => ("GEMINI_API_KEY", "GEMINI_MODEL"),
+        }
+    }
+
     /// A stable, low-cardinality provider label.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -627,23 +636,43 @@ struct ProviderSlot {
     provider: Option<Arc<dyn AiProvider>>,
 }
 
+impl ProviderSlot {
+    const fn unconfigured() -> Self {
+        Self {
+            state: ProviderState::MissingBoth,
+            provider: None,
+        }
+    }
+
+    fn from_env(kind: ProviderKind, limits: Limits) -> Self {
+        let (key_name, model_name) = kind.env_variable_names();
+        let (state, provider) =
+            make_provider(kind, read_env(key_name), read_env(model_name), limits);
+        Self { state, provider }
+    }
+
+    fn from_settings(kind: ProviderKind, settings: ProviderSettings, limits: Limits) -> Self {
+        let (state, provider) = make_provider_from_settings(kind, settings, limits);
+        Self { state, provider }
+    }
+}
+
 impl ProviderRegistry {
+    /// Builds a registry whose slots are `slot_for(kind)` for every known kind.
+    /// Each constructor below is one call to this with a pure slot builder, so
+    /// no registry is ever created half-configured and then filled in.
+    fn with_slots(limits: Limits, slot_for: impl Fn(ProviderKind) -> ProviderSlot) -> Self {
+        let slots = ProviderKind::ALL
+            .into_iter()
+            .map(|kind| (kind, slot_for(kind)))
+            .collect();
+        Self { limits, slots }
+    }
+
     /// Creates an empty registry with every provider marked unconfigured.
     #[must_use]
     pub fn empty(limits: Limits) -> Self {
-        let slots = ProviderKind::ALL
-            .into_iter()
-            .map(|kind| {
-                (
-                    kind,
-                    ProviderSlot {
-                        state: ProviderState::MissingBoth,
-                        provider: None,
-                    },
-                )
-            })
-            .collect();
-        Self { limits, slots }
+        Self::with_slots(limits, |_| ProviderSlot::unconfigured())
     }
 
     /// Builds a registry from the six documented environment variables.
@@ -654,28 +683,22 @@ impl ProviderRegistry {
     /// providers from becoming ready.
     #[must_use]
     pub fn from_env(limits: Limits) -> Self {
-        let mut registry = Self::empty(limits);
-        registry.configure_from_env(ProviderKind::OpenAi, "OPENAI_API_KEY", "OPENAI_MODEL");
-        registry.configure_from_env(
-            ProviderKind::Anthropic,
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_MODEL",
-        );
-        registry.configure_from_env(ProviderKind::Gemini, "GEMINI_API_KEY", "GEMINI_MODEL");
-        registry
+        Self::with_slots(limits, |kind| ProviderSlot::from_env(kind, limits))
     }
 
     /// Builds a registry from explicit, already validated configuration.
     #[must_use]
     pub fn from_configuration(limits: Limits, configuration: ProviderConfiguration) -> Self {
-        let mut registry = Self::empty(limits);
-        for (kind, settings) in configuration.settings {
-            let (state, provider) = make_provider_from_settings(kind, settings, limits);
-            registry
-                .slots
-                .insert(kind, ProviderSlot { state, provider });
-        }
-        registry
+        // Unconfigured slots for every kind first, then the configured ones;
+        // `BTreeMap: FromIterator` keeps the later entry on a duplicate key.
+        let slots = ProviderKind::ALL
+            .into_iter()
+            .map(|kind| (kind, ProviderSlot::unconfigured()))
+            .chain(configuration.settings.into_iter().map(|(kind, settings)| {
+                (kind, ProviderSlot::from_settings(kind, settings, limits))
+            }))
+            .collect();
+        Self { limits, slots }
     }
 
     /// Returns all local provider statuses without making network requests.
@@ -751,13 +774,6 @@ impl ProviderRegistry {
         let request = AiRequest::new(instructions, evidence, self.limits)?;
         let response = slot.generate(&request).await?;
         Ok(AdvisoryAnalysis { kind, response })
-    }
-
-    fn configure_from_env(&mut self, kind: ProviderKind, key_name: &str, model_name: &str) {
-        let key = read_env(key_name);
-        let model = read_env(model_name);
-        let (state, provider) = make_provider(kind, key, model, self.limits);
-        self.slots.insert(kind, ProviderSlot { state, provider });
     }
 }
 
