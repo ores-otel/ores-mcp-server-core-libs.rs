@@ -119,11 +119,19 @@ impl TelemetryConfig {
     /// Invalid targets are rejected without changing the configuration. This
     /// prevents caller-controlled filter directives from being interpreted.
     #[must_use]
-    pub fn with_target_level(mut self, target: &'static str, level: LogLevel) -> Self {
-        if validated_identity(target).is_some() {
-            self.target_levels.push((target, level));
+    pub fn with_target_level(self, target: &'static str, level: LogLevel) -> Self {
+        if validated_identity(target).is_none() {
+            return self;
         }
-        self
+        let target_levels = self
+            .target_levels
+            .into_iter()
+            .chain(Some((target, level)))
+            .collect();
+        Self {
+            target_levels,
+            ..self
+        }
     }
 
     /// Controls whether tracing events are additionally exported as OTLP logs.
@@ -520,24 +528,28 @@ fn install_subscriber(
         .is_ok()
 }
 
+// Dependency targets that can contain protocol or peer metadata remain
+// bounded regardless of application target overrides. `RUST_LOG` is not
+// consumed because it accepts arbitrary directives.
+const BOUNDED_DEPENDENCY_DIRECTIVES: &str = "rmcp=off,hyper=warn,hyper_util=warn,h2=warn,reqwest=warn,tonic=warn,tower=warn,tower_http=warn,axum=warn,tungstenite=warn,tokio_tungstenite=warn";
+
 fn safe_log_filter(config: &TelemetryConfig) -> EnvFilter {
     let default_level = configured_log_level(
         std::env::var_os("ORES_LOG_LEVEL").as_deref(),
         config.default_log_level,
     );
-    let mut directives = default_level.as_str().to_string();
-    for (target, level) in &config.target_levels {
-        directives.push(',');
-        directives.push_str(target);
-        directives.push('=');
-        directives.push_str(level.as_str());
-    }
-    // Dependency targets that can contain protocol or peer metadata remain
-    // bounded regardless of application target overrides. `RUST_LOG` is not
-    // consumed because it accepts arbitrary directives.
-    directives.push_str(
-        ",rmcp=off,hyper=warn,hyper_util=warn,h2=warn,reqwest=warn,tonic=warn,tower=warn,tower_http=warn,axum=warn,tungstenite=warn,tokio_tungstenite=warn",
-    );
+    // The default level first, then application overrides, then the bounded
+    // dependency directives, joined as one value.
+    let directives = std::iter::once(default_level.as_str().to_string())
+        .chain(
+            config
+                .target_levels
+                .iter()
+                .map(|(target, level)| format!("{target}={}", level.as_str())),
+        )
+        .chain(std::iter::once(BOUNDED_DEPENDENCY_DIRECTIVES.to_string()))
+        .collect::<Vec<_>>()
+        .join(",");
     EnvFilter::new(directives)
 }
 
@@ -565,16 +577,18 @@ where
 }
 
 fn resource(service_name: &str, service_namespace: &str, service_version: &str) -> Resource {
-    let mut attributes = vec![
+    let deployment_environment = std::env::var("DEPLOYMENT_ENV")
+        .ok()
+        .filter(|value| valid_attribute_value(value))
+        .map(|value| KeyValue::new("deployment.environment.name", value));
+    let attributes: Vec<KeyValue> = [
         KeyValue::new("service.name", service_name.to_string()),
         KeyValue::new("service.namespace", service_namespace.to_string()),
         KeyValue::new("service.version", service_version.to_string()),
-    ];
-    if let Ok(value) = std::env::var("DEPLOYMENT_ENV")
-        && valid_attribute_value(&value)
-    {
-        attributes.push(KeyValue::new("deployment.environment.name", value));
-    }
+    ]
+    .into_iter()
+    .chain(deployment_environment)
+    .collect();
     Resource::builder_empty()
         .with_attributes(attributes)
         .build()

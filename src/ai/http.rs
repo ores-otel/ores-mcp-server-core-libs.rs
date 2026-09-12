@@ -54,6 +54,11 @@ impl SecureHttp {
         request: RequestBuilder,
         body: Vec<u8>,
     ) -> Result<Vec<u8>, ProviderError> {
+        // HOT-PATH (imperative by design): the response body is read chunk by
+        // chunk through reqwest's `&mut self` streaming API and appended to one
+        // bounded buffer; buffering a fresh `Vec` per chunk would copy the
+        // whole body once per chunk. The mutation is confined to this method;
+        // callers receive the finished, bound-checked `Vec<u8>`.
         let mut response = request
             .body(body)
             .send()
@@ -114,9 +119,14 @@ pub(crate) fn secret_header(
         Some(prefix) => format!("{prefix}{}", secret.expose()),
         None => secret.expose().to_string(),
     };
-    let mut header = HeaderValue::from_str(&value).map_err(|_| ProviderError::Configuration)?;
-    header.set_sensitive(true);
-    Ok(header)
+    // `set_sensitive` is a `&mut self` setter on `http::HeaderValue`; the
+    // mutation is confined to the closure and only the finished value escapes.
+    HeaderValue::from_str(&value)
+        .map(|mut header| {
+            header.set_sensitive(true);
+            header
+        })
+        .map_err(|_| ProviderError::Configuration)
 }
 
 fn classify_transport_error(error: &reqwest::Error) -> ProviderError {

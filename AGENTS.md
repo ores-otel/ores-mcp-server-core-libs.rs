@@ -51,6 +51,7 @@ Shared backends this org should lean on (see parent file for detail):
 - Never log, return, or serialize secret values. Capability checks report names/presence only.
 - Do not add filesystem write, kubectl mutation, credentialed SSRF, or unauthenticated non-loopback HTTP without a dedicated review.
 - Git: merge, never rebase/stash/reset unless a human explicitly authorizes. Resolve conflicts semantically.
+- Build values, don't mutate them: functions return new values instead of filling `&mut` parameters or caller-owned collections. Deliberate exceptions on hot paths (inside a lock, streaming bodies, the accept loop) carry a `HOT-PATH (imperative by design)` comment with the reason. See [`FUNCTIONAL-STYLE.md`](./FUNCTIONAL-STYLE.md).
 
 ## Encrypted environment (sops + age + just + nix)
 
@@ -89,3 +90,10 @@ cargo test --locked --all-targets
 
 ## Note
 This crate is shared MCP **core libraries**, not a product stdio server. Keep stdout-wire rules in dependents.
+
+## Repository-local Git worktrees
+
+- Create or use a Git worktree only when the human operator explicitly authorizes it for the current task. Concurrency or a dirty checkout is not permission by itself.
+- Put every authorized worktree at `<repository-root>/tmp/worktrees/<name>`; from the repository root, use `./tmp/worktrees/<name>`. Never place worktrees beside repositories or organization directories.
+- Keep `tmp`, `temp`, `tmp/worktrees`, and `temp/worktrees` ignored in the repository-root `.gitignore`. Do not commit files from those directories.
+- Relocate or remove a worktree only when the operator explicitly requests it. Before removal, preserve and publish intended changes, verify its commit is represented on the target branch, and confirm there are no tracked, untracked, ignored-sensitive, or in-use files that must survive. Remove it with `git worktree remove <path>` without `--force`; never delete a worktree directory with `rm`.
