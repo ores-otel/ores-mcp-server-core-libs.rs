@@ -51,6 +51,7 @@ Shared backends this org should lean on (see parent file for detail):
 - Never log, return, or serialize secret values. Capability checks report names/presence only.
 - Do not add filesystem write, kubectl mutation, credentialed SSRF, or unauthenticated non-loopback HTTP without a dedicated review.
 - Git: merge, never rebase/stash/reset unless a human explicitly authorizes. Resolve conflicts semantically.
+- Build values, don't mutate them: functions return new values instead of filling `&mut` parameters or caller-owned collections. Deliberate exceptions on hot paths (inside a lock, streaming bodies, the accept loop) carry a `HOT-PATH (imperative by design)` comment with the reason. See [`FUNCTIONAL-STYLE.md`](./FUNCTIONAL-STYLE.md).
 
 ## Encrypted environment (sops + age + just + nix)
 

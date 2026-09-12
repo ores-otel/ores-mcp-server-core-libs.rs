@@ -286,6 +286,12 @@ impl LifecycleController {
     /// the formal relation, or another variant for a poisoned lock/revision
     /// exhaustion.
     pub fn transition(&self, event: LifecycleEvent) -> Result<LifecycleSnapshot, TransitionError> {
+        // HOT-PATH (imperative by design): the snapshot swap and bounded audit
+        // ring are updated under the controller lock so every transition is
+        // linearized and published in revision order; rebuilding the audit
+        // `VecDeque` per transition would hold the lock for an allocation on
+        // every lifecycle event. The mutation is confined to this critical
+        // section; callers receive an immutable `LifecycleSnapshot` value.
         let mut data = self.lock_data()?;
         let from = data.snapshot.state;
         let to = transition_target(from, event)
@@ -430,32 +436,24 @@ impl ModelValidationReport {
 /// lifecycle invariant.
 pub fn validate_model() -> Result<ModelValidationReport, ModelViolation> {
     let declared = ALL_STATES.into_iter().collect::<BTreeSet<_>>();
-    let mut transition_count = 0;
-    for state in ALL_STATES {
-        for event in ALL_EVENTS {
-            if let Some(target) = transition_target(state, event) {
-                transition_count += 1;
-                if !declared.contains(&target) {
-                    return Err(ModelViolation::UndeclaredTarget);
-                }
-                if state.is_terminal() {
-                    return Err(ModelViolation::TerminalHasOutgoingTransition);
-                }
-            }
+    // The whole transition relation as `(source, target)` pairs, in declaration
+    // order; the checks below are folds over this value.
+    let transitions: Vec<(LifecycleState, LifecycleState)> = ALL_STATES
+        .into_iter()
+        .flat_map(|state| successors(state).map(move |target| (state, target)))
+        .collect();
+    transitions.iter().try_for_each(|(state, target)| {
+        if !declared.contains(target) {
+            return Err(ModelViolation::UndeclaredTarget);
         }
-    }
+        if state.is_terminal() {
+            return Err(ModelViolation::TerminalHasOutgoingTransition);
+        }
+        Ok(())
+    })?;
+    let transition_count = transitions.len();
 
-    let mut reachable = BTreeSet::from([LifecycleState::Created]);
-    let mut frontier = vec![LifecycleState::Created];
-    while let Some(state) = frontier.pop() {
-        for event in ALL_EVENTS {
-            if let Some(target) = transition_target(state, event)
-                && reachable.insert(target)
-            {
-                frontier.push(target);
-            }
-        }
-    }
+    let reachable = reachable_closure(&BTreeSet::from([LifecycleState::Created]));
     if reachable != declared {
         return Err(ModelViolation::UnreachableState);
     }
@@ -475,6 +473,29 @@ pub fn validate_model() -> Result<ModelValidationReport, ModelViolation> {
         reachable_states: reachable,
         transition_count,
     })
+}
+
+/// Every state reachable from `state` in exactly one event.
+fn successors(state: LifecycleState) -> impl Iterator<Item = LifecycleState> {
+    ALL_EVENTS
+        .into_iter()
+        .filter_map(move |event| transition_target(state, event))
+}
+
+/// The least fixed point of `reachable ∪ successors(reachable)`: each step
+/// builds a new, larger set, and the recursion ends when a step adds nothing.
+/// The state space is finite, so this terminates within `ALL_STATES.len()` steps.
+fn reachable_closure(reachable: &BTreeSet<LifecycleState>) -> BTreeSet<LifecycleState> {
+    let expanded: BTreeSet<LifecycleState> = reachable
+        .iter()
+        .copied()
+        .chain(reachable.iter().copied().flat_map(successors))
+        .collect();
+    if expanded.len() == reachable.len() {
+        expanded
+    } else {
+        reachable_closure(&expanded)
+    }
 }
 
 /// Exhaustive model invariant violation.
@@ -517,22 +538,21 @@ mod tests {
     fn duplicate_concurrent_start_is_linearized_once() {
         let controller = LifecycleController::new(8).expect("valid controller");
         let barrier = Arc::new(Barrier::new(3));
-        let mut joins = Vec::new();
-        for _ in 0..2 {
-            let controller = controller.clone();
-            let barrier = barrier.clone();
-            joins.push(thread::spawn(move || {
-                barrier.wait();
-                controller.transition(LifecycleEvent::Start)
-            }));
-        }
+        let joins: Vec<_> = (0..2)
+            .map(|_| {
+                let controller = controller.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    barrier.wait();
+                    controller.transition(LifecycleEvent::Start)
+                })
+            })
+            .collect();
         barrier.wait();
-        let mut successes = 0;
-        for join in joins {
-            if join.join().expect("thread did not panic").is_ok() {
-                successes += 1;
-            }
-        }
+        let successes = joins
+            .into_iter()
+            .filter_map(|join| join.join().expect("thread did not panic").ok())
+            .count();
         assert_eq!(successes, 1);
         assert_eq!(
             controller.snapshot().expect("snapshot"),

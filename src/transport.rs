@@ -114,15 +114,18 @@ impl HttpTransportConfig {
     /// Returns an invalid-input error for malformed or unsafe configuration.
     pub fn from_env() -> io::Result<Self> {
         let bind = env_socket("MCP_HTTP_BIND")?.unwrap_or_else(|| Self::default().bind);
-        let mut config = Self::for_bind(bind);
-        override_list("MCP_HTTP_ALLOWED_HOSTS", &mut config.allowed_hosts)?;
-        override_list("MCP_HTTP_ALLOWED_ORIGINS", &mut config.allowed_origins)?;
-        override_usize("MCP_HTTP_MAX_BODY_BYTES", &mut config.max_body_bytes)?;
-        override_bool("MCP_HTTP_ALLOW_REMOTE", &mut config.allow_remote)?;
-        override_duration(
-            "MCP_HTTP_SHUTDOWN_GRACE_SECONDS",
-            &mut config.shutdown_grace,
-        )?;
+        let defaults = Self::for_bind(bind);
+        let config = Self {
+            allowed_hosts: env_list("MCP_HTTP_ALLOWED_HOSTS", defaults.allowed_hosts)?,
+            allowed_origins: env_list("MCP_HTTP_ALLOWED_ORIGINS", defaults.allowed_origins)?,
+            max_body_bytes: env_usize("MCP_HTTP_MAX_BODY_BYTES", defaults.max_body_bytes)?,
+            allow_remote: env_bool("MCP_HTTP_ALLOW_REMOTE", defaults.allow_remote)?,
+            shutdown_grace: env_duration(
+                "MCP_HTTP_SHUTDOWN_GRACE_SECONDS",
+                defaults.shutdown_grace,
+            )?,
+            ..defaults
+        };
         config.validate()?;
         Ok(config)
     }
@@ -182,11 +185,17 @@ impl TcpTransportConfig {
     /// Returns an invalid-input error for malformed or unsafe configuration.
     pub fn from_env() -> io::Result<Self> {
         let bind = env_socket("MCP_TCP_BIND")?.unwrap_or_else(|| Self::default().bind);
-        let mut config = Self::for_bind(bind);
-        override_usize("MCP_TCP_MAX_CONNECTIONS", &mut config.max_connections)?;
-        override_usize("MCP_TCP_MAX_MESSAGE_BYTES", &mut config.max_message_bytes)?;
-        override_bool("MCP_TCP_ALLOW_REMOTE", &mut config.allow_remote)?;
-        override_duration("MCP_TCP_SHUTDOWN_GRACE_SECONDS", &mut config.shutdown_grace)?;
+        let defaults = Self::for_bind(bind);
+        let config = Self {
+            max_connections: env_usize("MCP_TCP_MAX_CONNECTIONS", defaults.max_connections)?,
+            max_message_bytes: env_usize("MCP_TCP_MAX_MESSAGE_BYTES", defaults.max_message_bytes)?,
+            allow_remote: env_bool("MCP_TCP_ALLOW_REMOTE", defaults.allow_remote)?,
+            shutdown_grace: env_duration(
+                "MCP_TCP_SHUTDOWN_GRACE_SECONDS",
+                defaults.shutdown_grace,
+            )?,
+            ..defaults
+        };
         config.validate()?;
         Ok(config)
     }
@@ -252,13 +261,16 @@ impl WebSocketTransportConfig {
     /// Returns an invalid-input error for malformed or unsafe configuration.
     pub fn from_env() -> io::Result<Self> {
         let bind = env_socket("MCP_WS_BIND")?.unwrap_or_else(|| Self::default().bind);
-        let mut config = Self::for_bind(bind);
-        override_list("MCP_WS_ALLOWED_HOSTS", &mut config.allowed_hosts)?;
-        override_list("MCP_WS_ALLOWED_ORIGINS", &mut config.allowed_origins)?;
-        override_usize("MCP_WS_MAX_CONNECTIONS", &mut config.max_connections)?;
-        override_usize("MCP_WS_MAX_MESSAGE_BYTES", &mut config.max_message_bytes)?;
-        override_bool("MCP_WS_ALLOW_REMOTE", &mut config.allow_remote)?;
-        override_duration("MCP_WS_SHUTDOWN_GRACE_SECONDS", &mut config.shutdown_grace)?;
+        let defaults = Self::for_bind(bind);
+        let config = Self {
+            allowed_hosts: env_list("MCP_WS_ALLOWED_HOSTS", defaults.allowed_hosts)?,
+            allowed_origins: env_list("MCP_WS_ALLOWED_ORIGINS", defaults.allowed_origins)?,
+            max_connections: env_usize("MCP_WS_MAX_CONNECTIONS", defaults.max_connections)?,
+            max_message_bytes: env_usize("MCP_WS_MAX_MESSAGE_BYTES", defaults.max_message_bytes)?,
+            allow_remote: env_bool("MCP_WS_ALLOW_REMOTE", defaults.allow_remote)?,
+            shutdown_grace: env_duration("MCP_WS_SHUTDOWN_GRACE_SECONDS", defaults.shutdown_grace)?,
+            ..defaults
+        };
         config.validate()?;
         Ok(config)
     }
@@ -279,12 +291,14 @@ impl WebSocketTransportConfig {
 }
 
 fn local_header_defaults(bind: SocketAddr) -> (Vec<String>, Vec<String>) {
-    let mut hosts = vec![bind.to_string()];
-    let mut origins = vec![format!("http://{bind}")];
-    if bind.ip().is_loopback() {
-        hosts.push(format!("localhost:{}", bind.port()));
-        origins.push(format!("http://localhost:{}", bind.port()));
-    }
+    // A loopback bind additionally admits the `localhost` spelling of itself.
+    let localhost_port = bind.ip().is_loopback().then_some(bind.port());
+    let hosts = std::iter::once(bind.to_string())
+        .chain(localhost_port.map(|port| format!("localhost:{port}")))
+        .collect();
+    let origins = std::iter::once(format!("http://{bind}"))
+        .chain(localhost_port.map(|port| format!("http://localhost:{port}")))
+        .collect();
     (hosts, origins)
 }
 
@@ -342,54 +356,52 @@ fn env_socket(name: &'static str) -> io::Result<Option<SocketAddr>> {
         .transpose()
 }
 
-fn override_list(name: &'static str, target: &mut Vec<String>) -> io::Result<()> {
-    if let Some(value) = env_value(name)? {
-        let parsed: Vec<_> = value
-            .split(',')
-            .map(str::trim)
-            .filter(|item| !item.is_empty())
-            .map(ToOwned::to_owned)
-            .collect();
-        if parsed.is_empty() {
-            return Err(invalid_config("transport allowlist must not be empty"));
-        }
-        *target = parsed;
+// Each `env_*` reader returns the value a configuration field should take: the
+// parsed environment override when the variable is set, otherwise `default`.
+// Nothing is written through a reference; `from_env` assembles the config from
+// the returned values.
+
+fn env_list(name: &'static str, default: Vec<String>) -> io::Result<Vec<String>> {
+    let Some(value) = env_value(name)? else {
+        return Ok(default);
+    };
+    let parsed: Vec<_> = value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    if parsed.is_empty() {
+        return Err(invalid_config("transport allowlist must not be empty"));
     }
-    Ok(())
+    Ok(parsed)
 }
 
-fn override_usize(name: &'static str, target: &mut usize) -> io::Result<()> {
-    if let Some(value) = env_value(name)? {
-        *target = value
+fn env_usize(name: &'static str, default: usize) -> io::Result<usize> {
+    env_value(name)?.map_or(Ok(default), |value| {
+        value
             .parse()
-            .map_err(|_| invalid_config("transport numeric environment value is invalid"))?;
-    }
-    Ok(())
+            .map_err(|_| invalid_config("transport numeric environment value is invalid"))
+    })
 }
 
-fn override_bool(name: &'static str, target: &mut bool) -> io::Result<()> {
-    if let Some(value) = env_value(name)? {
-        *target = match value.as_str() {
-            "1" | "true" | "TRUE" => true,
-            "0" | "false" | "FALSE" => false,
-            _ => {
-                return Err(invalid_config(
-                    "transport boolean environment value is invalid",
-                ));
-            }
-        };
-    }
-    Ok(())
+fn env_bool(name: &'static str, default: bool) -> io::Result<bool> {
+    env_value(name)?.map_or(Ok(default), |value| match value.as_str() {
+        "1" | "true" | "TRUE" => Ok(true),
+        "0" | "false" | "FALSE" => Ok(false),
+        _ => Err(invalid_config(
+            "transport boolean environment value is invalid",
+        )),
+    })
 }
 
-fn override_duration(name: &'static str, target: &mut Duration) -> io::Result<()> {
-    if let Some(value) = env_value(name)? {
-        let seconds = value
+fn env_duration(name: &'static str, default: Duration) -> io::Result<Duration> {
+    env_value(name)?.map_or(Ok(default), |value| {
+        value
             .parse()
-            .map_err(|_| invalid_config("transport duration environment value is invalid"))?;
-        *target = Duration::from_secs(seconds);
-    }
-    Ok(())
+            .map(Duration::from_secs)
+            .map_err(|_| invalid_config("transport duration environment value is invalid"))
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -804,12 +816,12 @@ where
         .with_graceful_shutdown(shutdown)
         .into_future();
     tokio::pin!(serving);
-    let mut cancelled = false;
-    let result = tokio::select! {
-        result = &mut serving => result,
+    // Each arm yields `(outcome, cancelled)` so the cancellation flag is a value
+    // produced by the select rather than a variable written from inside an arm.
+    let (result, cancelled) = tokio::select! {
+        result = &mut serving => (result, false),
         () = cancellation.cancelled() => {
-            cancelled = true;
-            match transition(&lifecycle, LifecycleEvent::Drain) {
+            let drained = match transition(&lifecycle, LifecycleEvent::Drain) {
                 Ok(()) => match tokio::time::timeout(config.shutdown_grace, &mut serving).await {
                     Ok(result) => result,
                     Err(_) => Err(io::Error::new(
@@ -818,7 +830,8 @@ where
                     )),
                 },
                 Err(error) => Err(error),
-            }
+            };
+            (drained, true)
         }
     };
     if result.is_err() && !cancelled {
@@ -869,7 +882,11 @@ async fn serve_tcp_connection<S, F>(
     }
 }
 
-async fn drain_tasks(tasks: &mut JoinSet<()>, grace: Duration) {
+/// Drains the connection task set, aborting whatever is still running once
+/// `grace` elapses. The set is taken by value: it is consumed here, and a
+/// `JoinSet` can only be polled through `&mut self`, so ownership moving in is
+/// the cleanest way to keep that mutation local.
+async fn drain_tasks(mut tasks: JoinSet<()>, grace: Duration) {
     let deadline = tokio::time::sleep(grace);
     tokio::pin!(deadline);
     while !tasks.is_empty() {
@@ -929,6 +946,12 @@ where
     let permits = Arc::new(Semaphore::new(config.max_connections));
     let factory = Arc::new(factory);
     let connection_cancellation = cancellation.child_token();
+    // HOT-PATH (imperative by design): the accept loop registers one task per
+    // inbound connection in the `JoinSet` and records the first fatal accept
+    // error; a `JoinSet` is a live scheduler handle that can only be polled and
+    // spawned into through `&mut self`, so rebuilding it per connection is
+    // impossible rather than merely costly. The mutation is confined to this
+    // loop and `drain_tasks`; callers receive only the final `io::Result<()>`.
     let mut tasks = JoinSet::new();
     let mut live_error = None;
     loop {
@@ -969,7 +992,7 @@ where
 
     transition(&lifecycle, LifecycleEvent::Drain)?;
     connection_cancellation.cancel();
-    drain_tasks(&mut tasks, config.shutdown_grace).await;
+    drain_tasks(tasks, config.shutdown_grace).await;
     finish_lifecycle(&lifecycle)?;
     if let Some(error) = live_error {
         Err(error)
@@ -1207,12 +1230,12 @@ where
         .with_graceful_shutdown(shutdown)
         .into_future();
     tokio::pin!(serving);
-    let mut cancelled = false;
-    let result = tokio::select! {
-        result = &mut serving => result,
+    // Each arm yields `(outcome, cancelled)` so the cancellation flag is a value
+    // produced by the select rather than a variable written from inside an arm.
+    let (result, cancelled) = tokio::select! {
+        result = &mut serving => (result, false),
         () = cancellation.cancelled() => {
-            cancelled = true;
-            match transition(&lifecycle, LifecycleEvent::Drain) {
+            let drained = match transition(&lifecycle, LifecycleEvent::Drain) {
                 Ok(()) => match tokio::time::timeout(config.shutdown_grace, &mut serving).await {
                     Ok(result) => result,
                     Err(_) => Err(io::Error::new(
@@ -1221,7 +1244,8 @@ where
                     )),
                 },
                 Err(error) => Err(error),
-            }
+            };
+            (drained, true)
         }
     };
     if result.is_err() && !cancelled {
@@ -1283,10 +1307,13 @@ mod tests {
 
     #[test]
     fn remote_bind_requires_explicit_opt_in() {
-        let mut config = HttpTransportConfig::for_bind(SocketAddr::from(([0, 0, 0, 0], 3_000)));
+        let config = HttpTransportConfig::for_bind(SocketAddr::from(([0, 0, 0, 0], 3_000)));
         assert!(config.validate().is_err());
-        config.allow_remote = true;
-        assert!(config.validate().is_ok());
+        let opted_in = HttpTransportConfig {
+            allow_remote: true,
+            ..config
+        };
+        assert!(opted_in.validate().is_ok());
     }
 
     #[test]
