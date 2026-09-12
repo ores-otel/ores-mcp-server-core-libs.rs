@@ -155,4 +155,5 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$GH_TOKEN"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"
+          gh auth setup-git --hostname github.com
+          git push "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_HEAD_REF}"
