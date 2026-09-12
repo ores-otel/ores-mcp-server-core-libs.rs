@@ -1,6 +1,10 @@
 default:
     @just --list
 
+# Required agent/CI gate. This checks path metadata without decrypting secrets.
+env-check:
+    bash scripts/check-encrypted-env.sh
+
 # Encrypt every direct env/dec/<profile>.env file into env/enc/<profile>.env.enc.
 encrypt-all:
     #!/usr/bin/env bash
