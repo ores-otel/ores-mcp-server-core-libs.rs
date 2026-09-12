@@ -1,0 +1,13 @@
+schema = 2
+
+[tasks.lint]
+run = ["cargo clippy --all-targets --locked -- -D warnings"]
+
+[tasks.format]
+run = ["cargo fmt --all --check"]
+
+[tasks.check]
+description = "Repository gate invoked by CI as `zed task run check`"
+aliases = ["ci"]
+depends = ["lint", "format"]
+run = ["echo 'check: all gates passed'"]
