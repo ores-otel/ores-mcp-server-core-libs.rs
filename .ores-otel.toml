@@ -1,0 +1,25 @@
+# Telemetry policy for ores-mcp-server-core-libs.rs (ores-otel-config.v1). Endpoints and credentials
+# stay in the environment; this file holds policy only.
+version = 1
+
+[common]
+enabled = true
+
+[common.logging]
+enabled = true
+level = "info"
+console = true
+auto_send = false
+
+[common.tracing]
+enabled = true
+sample_ratio = 0.1
+propagators = ["tracecontext", "baggage"]
+
+[server]
+service_name = "ores-mcp-server-core-libs"
+
+# No implicit OTLP provider: export stays off until the application installs
+# an explicit, application-owned transport.
+[server.exporter]
+protocol = "none"
