@@ -2,7 +2,15 @@ schema_version = 1
 
 [compatibility]
 repository = "https://github.com/shared-auth/shared-auth-interfaces"
+commit = "52b7ac7fbf0c7c169684f613eda923f3aa6c82e9"
 
-[runtime]
-# shared-auth reads its credentials from the environment, never from this file.
-env = ["SHARED_AUTH_URL", "SHARED_AUTH_TOKEN", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]
+[factors.two_factor]
+required = false
+methods = ["totp", "passkey"]
+
+[factors.three_factor]
+enabled = true
+methods = ["totp", "passkey"]
+
+[pages]
+show = ["sign-in", "challenge", "error"]

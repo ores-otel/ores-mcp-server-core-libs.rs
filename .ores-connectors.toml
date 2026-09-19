@@ -1,30 +1,25 @@
 # Cloud and SaaS connectors for ores-otel/ores-mcp-server-core-libs.rs.
 #
 # A connector is declared by the ENVIRONMENT VARIABLE NAMES its SDK reads, not
-# by any credential or account value. Define the env and the connector is live;
-# nothing here needs editing per deploy. Secrets never appear in this file.
+# by any credential or account value. Define the env and the connector is live.
+# Secrets never appear in this file.
 #
-# Non-secret identifiers below (org slugs, domain, Slack channel, Linear
-# project) come from ores-otel's infra-isolation contract where recorded. An empty
-# identifier means it is not recorded on disk, not that the connector is
-# unavailable — the env vars still drive it.
+# Non-secret identifiers (org slugs, domain, Slack channel, Linear project)
+# come from ores-otel's infra-isolation contract where recorded; an empty value
+# means "not recorded on disk", not "unavailable" — the env vars still drive it.
 schema_version = 1
-contract = "provider-sync-adapters-v1"
 github_org = "ores-otel"
 
 [connectors.aws]
 enabled = true
 sdk = "aws-sdk-rust"
-# Standard AWS chain: static keys, SSO/role, or IMDS all resolve from these.
 env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION", "AWS_ROLE_ARN", "AWS_ENDPOINT_URL"]
-region_env = "AWS_REGION"
 
 [connectors.gcp]
 enabled = true
 sdk = "google-cloud-rust"
 env = ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT"]
 project = ""
-project_env = "GOOGLE_CLOUD_PROJECT"
 
 [connectors.neon]
 enabled = true

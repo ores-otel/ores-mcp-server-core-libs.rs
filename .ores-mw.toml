@@ -7,6 +7,6 @@ default_target = "server"
 [[targets]]
 name = "server"
 role = "server"
-roots = ["."]
+roots = ["src"]
 middleware = "propagation-only"
 propagate_headers = ["traceparent", "baggage", "x-request-id"]

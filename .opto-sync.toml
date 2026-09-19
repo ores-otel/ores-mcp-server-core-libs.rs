@@ -1,7 +1,25 @@
-# Sync policy for ores-mcp-server-core-libs.rs. This server publishes no canonical entity yet, so the
-# direction is declared read-only rather than left implicit.
-entity = "none"
-direction = "canonical-to-source"
-conflict_policy = "newest-observation-wins"
-idempotency_version = 2
-transport = ["https"]
+version = 1
+mode = "server"
+strict = true
+
+[flags2env]
+contract = ".cli-flags.toml"
+require_audit = true
+precedence = "argv-over-env"
+
+[sync]
+push_interval_ms = 5000
+pull_interval_ms = 5000
+max_batch_size = 64
+conflict_policy = "manual"
+
+[[env]]
+name = "audit_capacity"
+key = "OPTO_SYNC_MCP_AUDIT_CAPACITY"
+kind = "integer"
+required = false
+secret = false
+default = "128"
+
+[server]
+enabled = true

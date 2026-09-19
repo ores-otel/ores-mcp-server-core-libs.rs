@@ -1,16 +1,21 @@
 protocol = "ores.lru-config.v1"
-namespace = "ores-mcp-server-core-libs.rs"
+namespace = "ores-mcp-server-core-libs"
 roles = ["server"]
 
 [redis]
 urlEnv = "REDIS_URL"
-keyPrefix = "ores:lru:v1:ores-mcp-server-core-libs.rs"
-pubsubChannel = "ores:lru:v1:ores-mcp-server-core-libs.rs:events"
+keyPrefix = "ores:lru:v1:ores-mcp-server-core-libs"
+pubsubChannel = "ores:lru:v1:ores-mcp-server-core-libs:events"
 reconcileIntervalMs = 180000
 reconnectMinMs = 1000
 reconnectMaxMs = 30000
 
 [defaults]
-capacity = 1024
+capacity = 512
 syncMode = "read_only"
 overflowMode = "reject_and_reconcile"
+failOpenOnStartup = false
+
+[[caches]]
+name = "runtime-env"
+role = "server"
