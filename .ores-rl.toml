@@ -1,0 +1,18 @@
+schemaVersion = "ores.rate-limit.config.v1"
+layout = "server-only"
+defaultPolicyId = "mcp-default"
+
+[server]
+root = "."
+backend = "redis"
+enforcementLayer = "service"
+redisUrlEnv = "REDIS_URL"
+keyHmacEnv = "ORES_RL_HMAC_KEY"
+
+[[policies]]
+policyId = "mcp-default"
+clientVisible = false
+algorithm = "token-bucket"
+identityScope = "anonymous-ip"
+capacity = 120
+windowMs = 0

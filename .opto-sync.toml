@@ -1,0 +1,7 @@
+# Sync policy for ores-mcp-server-core-libs.rs. This server publishes no canonical entity yet, so the
+# direction is declared read-only rather than left implicit.
+entity = "none"
+direction = "canonical-to-source"
+conflict_policy = "newest-observation-wins"
+idempotency_version = 2
+transport = ["https"]

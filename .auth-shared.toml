@@ -1,0 +1,8 @@
+schema_version = 1
+
+[compatibility]
+repository = "https://github.com/shared-auth/shared-auth-interfaces"
+
+[runtime]
+# shared-auth reads its credentials from the environment, never from this file.
+env = ["SHARED_AUTH_URL", "SHARED_AUTH_TOKEN", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]

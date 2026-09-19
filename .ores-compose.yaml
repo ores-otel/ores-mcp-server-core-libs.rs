@@ -1,0 +1,11 @@
+schema_version: ores.compose.v1
+project: ores-mcp-server-core-libs.rs
+allow_lazy_start: false
+
+services:
+  ores-mcp-server-core-libs.rs:
+    name: ores-mcp-server-core-libs.rs
+    runtime: host
+    build:
+      - ["cargo", "build", "--bins"]
+    command: ["./target/debug/ores-mcp-server-core-libs.rs"]

@@ -1,0 +1,17 @@
+# Telemetry policy for ores-mcp-server-core-libs.rs. Endpoints and credentials stay in the environment.
+version = 1
+
+[server]
+enabled = true
+service_name = "ores-mcp-server-core-libs.rs"
+
+[server.logging]
+enabled = true
+level = "info"
+console = true
+auto_send = false
+
+[server.tracing]
+enabled = true
+sample_ratio = 1.0
+propagators = ["tracecontext", "baggage"]
