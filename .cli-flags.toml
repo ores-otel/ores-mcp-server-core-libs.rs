@@ -1,0 +1,12 @@
+# Canonical CLI contract for ores-mcp-server-core-libs.rs. flags-2-env parses this at runtime; keep
+# option names, defaults and env keys here rather than duplicating them in Rust.
+[help]
+url = "https://github.com/ores-otel/ores-mcp-server-core-libs.rs"
+columns = ["options", "env", "type", "default", "description"]
+
+[parse]
+stop_at_first_positional = false
+allow_unknown = false
+
+[env]
+ignore = ["GITHUB_TOKEN"]
