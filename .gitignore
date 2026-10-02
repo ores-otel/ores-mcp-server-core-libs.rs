@@ -9,10 +9,10 @@
 /.sops.yaml
 /.age/
 /.sops/
-/age-key.txt
-/age-keys.txt
-/age-key*.txt
-/age-keys*.txt
+age-key.txt
+age-keys.txt
+age-key*.txt
+age-keys*.txt
 /*.agekey
 /*.age-key
 
@@ -38,11 +38,10 @@ tmp/worktrees/
 tmp/
 temp/
 # Repository-local temporary data and authorized Git worktrees
+tmp
+temp
 tmp/worktrees
 temp/worktrees
 
 # machine-local symlink to ORESoftware/my-ai AGENTS.md; never committed
 .ores/
-
-# build output (DEN-3945 conformance): never tracked
-target/
