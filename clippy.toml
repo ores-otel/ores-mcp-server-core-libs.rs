@@ -1,0 +1,22 @@
+# ores-lint :: clippy configuration
+#
+# clippy.toml tunes lint BEHAVIOUR; which lints run is decided by
+# .ores-lint/rust.sh. Clippy walks up from each crate directory to find this
+# file, so one at the repo root covers every crate in the workspace.
+
+# Matches rust-toolchain.toml (1.88.0) and Cargo.toml's rust-version. Without
+# this, clippy suggests APIs newer than the pinned toolchain accepts.
+msrv = "1.88"
+
+# Lint the public API too. This crate is published, so a bad signature is
+# exactly the thing worth catching before it becomes a breaking change.
+avoid-breaking-exported-api = false
+
+# A server core library: wide fn signatures and deep nesting are the usual
+# early warning that a module is doing too much.
+too-many-arguments-threshold = 7
+cognitive-complexity-threshold = 25
+type-complexity-threshold = 300
+
+# Observability code churns through strings; keep the threshold honest.
+enum-variant-name-threshold = 3

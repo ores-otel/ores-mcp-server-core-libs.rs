@@ -1,0 +1,7 @@
+# ores-lint :: rustfmt configuration
+# Formatting only. Nothing here overlaps with the clippy lints in
+# .ores-lint/rust.sh, so `cargo fmt` and `sh .ores-lint/lint.sh` never disagree.
+edition = "2024"
+max_width = 100
+use_small_heuristics = "Default"
+newline_style = "Unix"
