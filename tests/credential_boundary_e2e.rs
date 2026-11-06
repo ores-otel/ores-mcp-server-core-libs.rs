@@ -39,10 +39,12 @@ fn configured_model_identifiers_cannot_inject_url_segments_or_headers() {
         "space id",
     ] {
         let error = ModelId::new(input).expect_err("unsafe model identifier accepted");
-        assert!(
-            !error.to_string().contains(input),
-            "error exposed user input"
-        );
+        if !input.is_empty() {
+            assert!(
+                !error.to_string().contains(input),
+                "error exposed user input"
+            );
+        }
     }
     assert_eq!(
         ModelId::new("release-2026_11.v1").unwrap().as_str(),
