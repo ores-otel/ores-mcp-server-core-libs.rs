@@ -1266,7 +1266,7 @@ mod tests {
     };
     use rmcp::{
         handler::server::ServerHandler,
-        model::{Implementation, ServerCapabilities, ServerInfo},
+        model::{Implementation, ServerCapabilities, ServerConfig},
         transport::Transport,
     };
     use serde_json::json;
@@ -1283,8 +1283,8 @@ mod tests {
     struct TestServer;
 
     impl ServerHandler for TestServer {
-        fn get_info(&self) -> ServerInfo {
-            ServerInfo::new(ServerCapabilities::builder().build())
+        fn get_info(&self) -> ServerConfig {
+            ServerConfig::new(ServerCapabilities::builder().build())
                 .with_server_info(Implementation::new("transport-test", "1.0.0"))
         }
     }
