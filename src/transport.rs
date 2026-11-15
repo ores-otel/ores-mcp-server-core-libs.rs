@@ -7,8 +7,8 @@
 //! Network transports bind to loopback by default and require an explicit
 //! `allow_remote` opt-in for any non-loopback address.
 
-use std::{env, future::IntoFuture, io, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::{env, future::IntoFuture, io, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 
 use axum::{
     Router,
@@ -1435,7 +1435,11 @@ mod tests {
         let mut transport = BoundedNdjsonTransport::new(reader, writer, 256);
         let eof_observed = Arc::clone(&transport.eof_observed);
         drop(client);
-        assert!(Transport::<RoleServer>::receive(&mut transport).await.is_none());
+        assert!(
+            Transport::<RoleServer>::receive(&mut transport)
+                .await
+                .is_none()
+        );
         assert!(eof_observed.load(Ordering::Acquire));
 
         let (mut client, server) = tokio::io::duplex(512);
@@ -1446,7 +1450,11 @@ mod tests {
             .write_all(b"{invalid json}\n")
             .await
             .expect("write malformed frame");
-        assert!(Transport::<RoleServer>::receive(&mut transport).await.is_none());
+        assert!(
+            Transport::<RoleServer>::receive(&mut transport)
+                .await
+                .is_none()
+        );
         assert!(
             !eof_observed.load(Ordering::Acquire),
             "invalid JSON must not be mistaken for an orderly stdio EOF"
