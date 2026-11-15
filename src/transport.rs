@@ -8,6 +8,7 @@
 //! `allow_remote` opt-in for any non-loopback address.
 
 use std::{env, future::IntoFuture, io, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use axum::{
     Router,
@@ -604,6 +605,9 @@ struct BoundedNdjsonTransport<R, W> {
     reader: FramedRead<R, LinesCodec>,
     writer: Arc<Mutex<Option<FramedWrite<W, LinesCodec>>>>,
     max_message_bytes: usize,
+    // Only a real EOF may permit a clean pre-initialization stdio shutdown.
+    // Invalid JSON and rejected frames must not set this marker.
+    eof_observed: Arc<AtomicBool>,
 }
 
 impl<R, W> BoundedNdjsonTransport<R, W>
@@ -619,6 +623,7 @@ where
                 LinesCodec::new_with_max_length(max_message_bytes),
             )))),
             max_message_bytes,
+            eof_observed: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -653,12 +658,19 @@ where
     }
 
     async fn receive(&mut self) -> Option<ClientJsonRpcMessage> {
-        let Ok(frame) = self.reader.next().await? else {
-            tracing::warn!(
-                transport_event = "frame_rejected",
-                "transport frame rejected"
-            );
-            return None;
+        let frame = match self.reader.next().await {
+            None => {
+                self.eof_observed.store(true, Ordering::Release);
+                return None;
+            }
+            Some(Ok(frame)) => frame,
+            Some(Err(_)) => {
+                tracing::warn!(
+                    transport_event = "frame_rejected",
+                    "transport frame rejected"
+                );
+                return None;
+            }
         };
         let Ok(message) = serde_json::from_str(&frame) else {
             tracing::warn!(transport_event = "json_rejected", "transport JSON rejected");
@@ -705,6 +717,7 @@ where
     };
     let transport =
         BoundedNdjsonTransport::new(tokio::io::stdin(), tokio::io::stdout(), MAX_MESSAGE_BYTES);
+    let eof_observed = Arc::clone(&transport.eof_observed);
     transition(&lifecycle, LifecycleEvent::Started)?;
     let result = match service.serve_with_ct(transport, cancellation).await {
         Ok(running) => running
@@ -712,6 +725,10 @@ where
             .await
             .map(|_| ())
             .map_err(|_| io::Error::other("MCP stdio service task failed")),
+        // rmcp reports initialization failure when stdin closes before an
+        // initialize phase completes (including discovery-only sessions).
+        // A clean EOF is ordinary stdio shutdown, not a protocol failure.
+        Err(_) if eof_observed.load(Ordering::Acquire) => Ok(()),
         Err(_) => Err(io::Error::other("MCP stdio initialization failed")),
     };
     if result.is_err() {
@@ -1408,6 +1425,31 @@ mod tests {
             Transport::<RoleServer>::receive(&mut transport)
                 .await
                 .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn ndjson_transport_only_marks_clean_eof_as_graceful() {
+        let (client, server) = tokio::io::duplex(512);
+        let (reader, writer) = split(server);
+        let mut transport = BoundedNdjsonTransport::new(reader, writer, 256);
+        let eof_observed = Arc::clone(&transport.eof_observed);
+        drop(client);
+        assert!(Transport::<RoleServer>::receive(&mut transport).await.is_none());
+        assert!(eof_observed.load(Ordering::Acquire));
+
+        let (mut client, server) = tokio::io::duplex(512);
+        let (reader, writer) = split(server);
+        let mut transport = BoundedNdjsonTransport::new(reader, writer, 256);
+        let eof_observed = Arc::clone(&transport.eof_observed);
+        client
+            .write_all(b"{invalid json}\\n")
+            .await
+            .expect("write malformed frame");
+        assert!(Transport::<RoleServer>::receive(&mut transport).await.is_none());
+        assert!(
+            !eof_observed.load(Ordering::Acquire),
+            "invalid JSON must not be mistaken for an orderly stdio EOF"
         );
     }
 
