@@ -1443,7 +1443,7 @@ mod tests {
         let mut transport = BoundedNdjsonTransport::new(reader, writer, 256);
         let eof_observed = Arc::clone(&transport.eof_observed);
         client
-            .write_all(b"{invalid json}\\n")
+            .write_all(b"{invalid json}\n")
             .await
             .expect("write malformed frame");
         assert!(Transport::<RoleServer>::receive(&mut transport).await.is_none());
